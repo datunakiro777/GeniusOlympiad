@@ -18,3 +18,15 @@ class User(Base):
     age: Mapped[int] = mapped_column(Integer, nullable=False)
     current_location: Mapped[str] = mapped_column(String(100), default="Unknown")
     phone_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    location_history: Mapped[list[UserLocationHistory]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class UserLocationHistory(Base):
+    __tablename__ = "user_location_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    latitude: Mapped[float] = mapped_column(Float, nullable=False)
+    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now(UTC))
+    user: Mapped[User] = relationship(back_populates="location_history")

@@ -1,26 +1,36 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, Session
 import models
-from database import Base, get_db, engine
+from contextlib import asynccontextmanager
+from database import engine, Base
+from database import get_db, init_db
 from typing import Annotated
 from sqlalchemy import select
 from schemas import UserCreate, UserLocationHistoryResponse, UserResponse
-from fastapi import HTTPException, status, Depends, APIRouter, FastAPI
+from fastapi import HTTPException, status, Depends, FastAPI
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
+    await engine.dispose()
+
 
 app = FastAPI()
 
-Base.metadata.create_all(bind=engine)
 
 @app.get("/users", response_model = list[UserResponse])
-def get_all_users(db : Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.User))
+async def get_all_users(db : Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User))
     users = result.scalars().all()
     return users
 
 
 @app.get("/users/{id}", response_model = UserResponse)
-def get_user(id: int, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.User).where(models.User.id == id))
+async def get_user(id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User).where(models.User.id == id))
     user = result.scalars().first()
 
     if user:
@@ -29,15 +39,15 @@ def get_user(id: int, db: Annotated[Session, Depends(get_db)]):
 
 
 @app.get("/locations", response_model=list[UserLocationHistoryResponse])
-def get_all_locations(db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.UserLocationHistory))
+async def get_all_locations(db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.UserLocationHistory))
     locations = result.scalars().all()
     return locations
 
 
 @app.get("/locations/{id}", response_model=UserLocationHistoryResponse)
-def get_location(id: int, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.UserLocationHistory).where(models.UserLocationHistory.id == id))
+async def get_location(id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.UserLocationHistory).where(models.UserLocationHistory.id == id))
     location = result.scalars().first()
 
     if location:
@@ -46,14 +56,14 @@ def get_location(id: int, db: Annotated[Session, Depends(get_db)]):
 
 
 @app.get("/users/{id}/locations", response_model=list[UserLocationHistoryResponse])
-def get_user_locations(id: int, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(models.User).where(models.User.id == id))
+async def get_user_locations(id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User).where(models.User.id == id))
     user = result.scalars().first()
 
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
 
-    result = db.execute(
+    result = await db.execute(
         select(models.UserLocationHistory).where(models.UserLocationHistory.user_id == id)
     )
     locations = result.scalars().all()
@@ -61,9 +71,9 @@ def get_user_locations(id: int, db: Annotated[Session, Depends(get_db)]):
 
 
 @app.post("/CreateUser", response_model= UserResponse, status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate, db : Annotated[Session, Depends(get_db)]):
+async def create_user(user: UserCreate, db : Annotated[AsyncSession, Depends(get_db)]):
 
-    result = db.execute(select(models.User).where(models.User.email == user.email))
+    result = await db.execute(select(models.User).where(models.User.email == user.email))
     existing_user = result.scalars().first()
 
     if existing_user:
@@ -77,6 +87,6 @@ def create_user(user: UserCreate, db : Annotated[Session, Depends(get_db)]):
         phone_number = user.phone_number
     )
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
+    await db.refresh(new_user)
     return new_user

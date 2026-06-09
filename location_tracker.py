@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from threading import Event
 
 from database import SessionLocal
-from models import LocationHistory, User
+from models import User, UserLocationHistory
 
 
 @dataclass(frozen=True)
@@ -19,22 +19,22 @@ class Location:
 LocationProvider = Callable[[int], Location | Awaitable[Location]]
 
 
-def save_user_location(user_id: int, location: Location) -> None:
+async def save_user_location(user_id: int, location: Location) -> None:
     """Save the user's latest location and append one history row."""
-    with SessionLocal() as db:
-        user = db.get(User, user_id)
+    async with SessionLocal() as db:
+        user = await db.get(User, user_id)
         if user is None:
             raise ValueError(f"User with id {user_id} does not exist")
 
         user.current_location = f"{location.latitude},{location.longitude}"
         db.add(
-            LocationHistory(
+            UserLocationHistory(
                 user_id=user_id,
                 latitude=location.latitude,
                 longitude=location.longitude,
             )
         )
-        db.commit()
+        await db.commit()
 
 
 async def track_user_location(
@@ -58,5 +58,5 @@ async def track_user_location(
             else location_result
         )
 
-        save_user_location(user_id, location)
+        await save_user_location(user_id, location)
         await asyncio.sleep(interval_seconds)

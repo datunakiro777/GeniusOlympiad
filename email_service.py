@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -8,7 +9,8 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 
-def _send(to_email: str, subject: str, html_body: str) -> bool:
+def _send_blocking(to_email: str, subject: str, html_body: str) -> bool:
+    """Blocking SMTP send — always run via asyncio.to_thread, never directly in an async handler."""
     if not settings.smtp_user or not settings.smtp_password:
         logger.warning("SMTP not configured — skipping email to %s (subject: %s)", to_email, subject)
         return False
@@ -32,7 +34,12 @@ def _send(to_email: str, subject: str, html_body: str) -> bool:
         return False
 
 
-def send_alert_email(recipient_email: str, recipient_name: str) -> bool:
+async def _send(to_email: str, subject: str, html_body: str) -> bool:
+    """Async wrapper — runs the blocking SMTP call in a thread pool."""
+    return await asyncio.to_thread(_send_blocking, to_email, subject, html_body)
+
+
+async def send_alert_email(recipient_email: str, recipient_name: str) -> bool:
     """
     Safety-check alert email.
     Sent when an admin/police broadcasts or targets a user to confirm their status.
@@ -64,10 +71,10 @@ def send_alert_email(recipient_email: str, recipient_name: str) -> bool:
       </div>
     </div>
     """
-    return _send(recipient_email, subject, html)
+    return await _send(recipient_email, subject, html)
 
 
-def send_rescue_email(recipient_email: str, recipient_name: str, coords: str = "Unknown") -> bool:
+async def send_rescue_email(recipient_email: str, recipient_name: str, coords: str = "Unknown") -> bool:
     """
     Rescue dispatch email.
     Sent when emergency services are being dispatched to a user in danger.
@@ -104,4 +111,4 @@ def send_rescue_email(recipient_email: str, recipient_name: str, coords: str = "
       </div>
     </div>
     """
-    return _send(recipient_email, subject, html)
+    return await _send(recipient_email, subject, html)

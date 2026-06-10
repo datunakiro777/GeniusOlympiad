@@ -26,7 +26,7 @@ def require_admin_or_police(current_user: models.User):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
 
-def _fire_email(user: models.User, notification_type: str):
+async def send_email(user: models.User, notification_type: str):
     name = f"{user.name} {user.last_name}"
     coords = (
         f"{user.latitude:.5f}, {user.longitude:.5f}"
@@ -34,9 +34,9 @@ def _fire_email(user: models.User, notification_type: str):
         else "Unknown"
     )
     if notification_type == "rescue":
-        send_rescue_email(user.email, name, coords)
+        await send_rescue_email(user.email, name, coords)
     else:
-        send_alert_email(user.email, name)
+        await send_alert_email(user.email, name)
 
 
 @router.post("/broadcast")
@@ -57,7 +57,7 @@ async def broadcast_safety_check(
         )
         db.add(notif)
         user.safety_status = "unknown"
-        _fire_email(user, body.notification_type)
+        await send_email(user, body.notification_type)
 
     await db.commit()
     return {"sent_to": len(users), "notification_type": body.notification_type}
@@ -83,7 +83,7 @@ async def send_targeted_alert(
     )
     db.add(notif)
     target.safety_status = "unknown"
-    _fire_email(target, body.notification_type)
+    await send_email(target, body.notification_type)
 
     await db.commit()
     return {"ok": True, "notification_type": body.notification_type}

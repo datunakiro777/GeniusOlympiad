@@ -3,23 +3,246 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ title }} | GeniusOlympiad</title>
+  <title>{{ title }} | DisasterTrack</title>
   <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+  {% block head %}{% endblock %}
 </head>
 <body>
-  <header class="site-header">
-    <a class="brand" href="{{ url_for('home') }}">GeniusOlympiad</a>
-    <nav>
-      <a href="{{ url_for('users_page') }}">Users</a>
-      <a href="{{ url_for('locations_page') }}">Locations</a>
-      <a href="{{ url_for('login_page') }}">Login</a>
-      <a href="{{ url_for('register_page') }}">Register</a>
-      <a href="/docs">API Docs</a>
-    </nav>
-  </header>
 
-  <main class="page">
-    {% block content %}{% endblock %}
-  </main>
+<header class="site-header">
+  <a class="brand" href="/">DisasterTrack</a>
+  <nav id="main-nav">
+    <a class="nav-link" href="/">Home</a>
+    <a class="nav-link" href="/map" id="nav-map" style="display:none">Live Map</a>
+    <a class="nav-link" href="/admin" id="nav-admin" style="display:none">Admin Panel</a>
+    <a class="nav-link" href="/police" id="nav-police" style="display:none">Dispatch</a>
+    <span id="nav-user-name" style="display:none"></span>
+    <span id="nav-role-badge" style="display:none" class="nav-role-badge"></span>
+    <a class="nav-link" href="/login" id="nav-login">Login</a>
+    <a class="nav-link btn btn-primary btn-sm" href="/register" id="nav-register">Register</a>
+    <button class="btn btn-outline btn-sm" id="nav-logout" style="display:none" onclick="logout()">Logout</button>
+  </nav>
+</header>
+
+<div id="notification-banner">
+  <div id="notif-alert-content">
+    <h3>Safety Check</h3>
+    <p>Emergency responders need to know your status. Are you safe right now?</p>
+    <div class="notif-actions">
+      <button class="btn btn-success" onclick="respondNotification('safe')">I am Safe</button>
+      <button class="btn btn-danger" onclick="respondNotification('danger')">I Need Help</button>
+    </div>
+  </div>
+  <div id="notif-rescue-content" style="display:none;">
+    <h3 style="color:#dc2626;">Rescue Dispatch</h3>
+    <p>Emergency services are being sent to your location. Please stay where you are and confirm your status.</p>
+    <div class="notif-actions">
+      <button class="btn btn-success" onclick="respondNotification('safe')">I am Safe Now</button>
+      <button class="btn btn-danger" onclick="respondNotification('danger')">I Still Need Help</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-sent" class="toast-sent">
+  <div class="toast-icon">&#10003;</div>
+  <div>
+    <div class="toast-title">Message sent</div>
+    <div class="toast-sub">The notification was delivered successfully.</div>
+  </div>
+</div>
+
+<div id="location-confirm-modal">
+  <div class="modal-box">
+    <h2>Share Your Location?</h2>
+    <p>DisasterTrack would like to track your location so emergency responders can find you. Your coordinates are only visible to admins and police officers.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="denyLocation()">Not Now</button>
+      <button class="btn btn-primary" onclick="allowLocation()">Allow Location</button>
+    </div>
+  </div>
+</div>
+
+<div id="emergency-modal">
+  <div class="modal-box">
+    <h2>Emergency Alert Sent</h2>
+    <p>Your location has been flagged as <strong>Danger</strong>. Emergency services are being notified.</p>
+    <div style="background:#fee2e2;border-radius:8px;padding:18px;margin-bottom:20px;">
+      <div style="font-size:1.5rem;font-weight:900;color:#dc2626;">Call 911</div>
+      <div style="color:#991b1b;font-size:.875rem;margin-top:4px;">Emergency call simulation — responders dispatched</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeEmergencyModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<main>{% block content %}{% endblock %}</main>
+
+<script>
+function getToken() { return localStorage.getItem('token'); }
+function setToken(t) { localStorage.setItem('token', t); }
+function clearToken() { localStorage.removeItem('token'); localStorage.removeItem('currentUser'); }
+
+function authHeaders() {
+  return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' };
+}
+
+function logout() {
+  clearToken();
+  stopLocationTracking();
+  window.location.href = '/login';
+}
+
+async function loadCurrentUser() {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const r = await fetch('/api/users/me', { headers: authHeaders() });
+    if (!r.ok) { clearToken(); return null; }
+    const user = await r.json();
+    localStorage.setItem('currentUser', JSON.stringify(user));
+    return user;
+  } catch { return null; }
+}
+
+function getCachedUser() {
+  try { return JSON.parse(localStorage.getItem('currentUser')); } catch { return null; }
+}
+
+async function setupNav() {
+  const user = await loadCurrentUser();
+  if (!user) {
+    document.getElementById('nav-login').style.display = '';
+    document.getElementById('nav-register').style.display = '';
+    return;
+  }
+  document.getElementById('nav-login').style.display = 'none';
+  document.getElementById('nav-register').style.display = 'none';
+  document.getElementById('nav-logout').style.display = '';
+  document.getElementById('nav-map').style.display = '';
+  document.getElementById('nav-user-name').style.display = '';
+  document.getElementById('nav-user-name').textContent = user.name + ' ' + user.last_name;
+
+  const badge = document.getElementById('nav-role-badge');
+  badge.style.display = '';
+  if (user.role === 'admin') {
+    badge.textContent = 'Admin';
+    badge.className = 'nav-role-badge badge-admin';
+    document.getElementById('nav-admin').style.display = '';
+    document.getElementById('nav-police').style.display = '';
+  } else if (user.role === 'police') {
+    badge.textContent = 'Police';
+    badge.className = 'nav-role-badge badge-police';
+    document.getElementById('nav-police').style.display = '';
+  } else {
+    badge.textContent = 'User';
+    badge.className = 'nav-role-badge badge-user';
+  }
+
+  startLocationTracking();
+  startNotificationPolling();
+}
+
+let _locationInterval = null;
+let _locationAllowed  = localStorage.getItem('locationAllowed') === 'true';
+
+function startLocationTracking() {
+  if (!navigator.geolocation) return;
+  if (_locationAllowed) {
+    _doStartTracking();
+  } else {
+    document.getElementById('location-confirm-modal').classList.add('show');
+  }
+}
+
+function _doStartTracking() {
+  navigator.geolocation.getCurrentPosition(sendLocation);
+  _locationInterval = setInterval(() => {
+    navigator.geolocation.getCurrentPosition(sendLocation);
+  }, 3 * 60 * 1000);
+}
+
+function allowLocation() {
+  _locationAllowed = true;
+  localStorage.setItem('locationAllowed', 'true');
+  document.getElementById('location-confirm-modal').classList.remove('show');
+  _doStartTracking();
+}
+
+function denyLocation() {
+  document.getElementById('location-confirm-modal').classList.remove('show');
+}
+
+function stopLocationTracking() {
+  if (_locationInterval) { clearInterval(_locationInterval); _locationInterval = null; }
+}
+
+async function sendLocation(pos) {
+  const { latitude, longitude } = pos.coords;
+  try {
+    await fetch('/api/users/me/location', {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ latitude, longitude }),
+    });
+  } catch {}
+}
+
+let _toastTimer = null;
+function showToastSent() {
+  const el = document.getElementById('toast-sent');
+  el.classList.add('show');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+let _notifInterval = null;
+let _pendingNotifId = null;
+
+function startNotificationPolling() {
+  checkNotifications();
+  _notifInterval = setInterval(checkNotifications, 15000);
+}
+
+async function checkNotifications() {
+  if (!getToken()) return;
+  try {
+    const r = await fetch('/api/users/me/notifications', { headers: authHeaders() });
+    if (!r.ok) return;
+    const notifs = await r.json();
+    if (notifs.length > 0) {
+      const notif = notifs[0];
+      _pendingNotifId = notif.id;
+      const isRescue = notif.notification_type === 'rescue';
+      document.getElementById('notif-alert-content').style.display  = isRescue ? 'none' : '';
+      document.getElementById('notif-rescue-content').style.display = isRescue ? '' : 'none';
+      document.getElementById('notification-banner').classList.add('show');
+    } else {
+      document.getElementById('notification-banner').classList.remove('show');
+    }
+  } catch {}
+}
+
+async function respondNotification(safetyStatus) {
+  if (!_pendingNotifId) return;
+  document.getElementById('notification-banner').classList.remove('show');
+  await fetch(`/api/users/me/notifications/${_pendingNotifId}/respond`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ safety_status: safetyStatus }),
+  });
+  _pendingNotifId = null;
+  if (safetyStatus === 'danger') {
+    document.getElementById('emergency-modal').classList.add('show');
+  }
+}
+
+function closeEmergencyModal() {
+  document.getElementById('emergency-modal').classList.remove('show');
+}
+
+setupNav();
+</script>
+{% block scripts %}{% endblock %}
 </body>
 </html>

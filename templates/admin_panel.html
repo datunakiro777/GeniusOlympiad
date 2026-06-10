@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', path='/admin.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+    <div>
+      <h1 style="margin-bottom:4px;">Admin Panel</h1>
+      <p class="text-muted">Manage users, roles, and send notifications</p>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-danger" onclick="openBroadcastModal()">Broadcast to All</button>
+      <a href="/map" class="btn btn-outline">Back to Live Map</a>
+    </div>
+  </div>
+
+  <div id="alert-msg" class="alert"></div>
+
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><h2>Send Targeted Notification</h2></div>
+    <div class="card-body">
+      <p class="text-muted" style="margin-bottom:16px;">Send a notification to a single user by their ID.</p>
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group" style="margin:0;flex:1;min-width:140px;">
+          <label for="target-user-id">User ID</label>
+          <input type="number" id="target-user-id" class="form-control" placeholder="e.g. 42" min="1">
+        </div>
+        <div class="form-group" style="margin:0;min-width:180px;">
+          <label for="targeted-type">Notification Type</label>
+          <select id="targeted-type" class="form-control">
+            <option value="alert">Alert — Safety Check</option>
+            <option value="rescue">Rescue — Dispatch Notice</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="sendTargetedAlert()" style="height:42px;">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2>All Users</h2>
+      <input type="text" id="search-input" class="form-control" placeholder="Search by name or email..." style="width:220px;" oninput="filterTable()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Safety Status</th>
+            <th>Role</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+          <tr><td colspan="7" style="text-align:center;color:#64748b;padding:32px;">Loading users...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="broadcast-modal">
+  <div class="modal-box">
+    <h2>Broadcast to All Users</h2>
+    <p>Choose the notification type, then confirm. All users' status will reset to Unknown.</p>
+    <div class="form-group" style="margin-bottom:20px;text-align:left;">
+      <label for="broadcast-type" style="font-weight:600;font-size:.875rem;">Notification Type</label>
+      <select id="broadcast-type" class="form-control" style="margin-top:6px;">
+        <option value="alert">Alert — Safety Check</option>
+        <option value="rescue">Rescue — Dispatch Notice</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeBroadcastModal()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-broadcast-btn" onclick="confirmBroadcast()">Send to Everyone</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allUsers = [];
+
+async function loadUsers() {
+  const r = await fetch('/api/users', { headers: authHeaders() });
+  if (r.status === 401) { window.location.href = '/login'; return; }
+  allUsers = await r.json();
+  renderTable(allUsers);
+}
+
+function statusPill(s) {
+  return `<span class="status-pill pill-${s}"><span class="status-dot status-${s}"></span>${s}</span>`;
+}
+
+function roleBadge(r) {
+  const cls   = { admin: 'badge-admin', police: 'badge-police', normal_user: 'badge-user' };
+  const label = { admin: 'Admin', police: 'Police', normal_user: 'User' };
+  return `<span class="nav-role-badge ${cls[r] || 'badge-user'}">${label[r] || r}</span>`;
+}
+
+function renderTable(users) {
+  const tbody = document.getElementById('users-tbody');
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#64748b;padding:32px;">No users found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map(u => `
+    <tr id="row-${u.id}">
+      <td>${u.id}</td>
+      <td><strong>${u.name} ${u.last_name}</strong></td>
+      <td>${u.email}</td>
+      <td>${u.phone_number}</td>
+      <td>${statusPill(u.safety_status)}</td>
+      <td id="role-cell-${u.id}">${roleBadge(u.role)}</td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <select id="msg-type-${u.id}" class="form-control" style="width:120px;padding:4px 8px;font-size:.78rem;height:30px;">
+            <option value="alert">Alert</option>
+            <option value="rescue">Rescue</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="sendById(${u.id})">Send</button>
+          <select class="form-control" style="width:110px;padding:4px 8px;font-size:.78rem;height:30px;" onchange="updateRole(${u.id}, this.value)">
+            <option value="normal_user" ${u.role==='normal_user'?'selected':''}>User</option>
+            <option value="police"      ${u.role==='police'?'selected':''}>Police</option>
+            <option value="admin"       ${u.role==='admin'?'selected':''}>Admin</option>
+          </select>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function filterTable() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  renderTable(allUsers.filter(u => `${u.name} ${u.last_name} ${u.email}`.toLowerCase().includes(q)));
+}
+
+async function updateRole(userId, newRole) {
+  showAlert('Updating role...', 'info');
+  const r = await fetch(`/api/users/${userId}/role`, {
+    method: 'PATCH', headers: authHeaders(),
+    body: JSON.stringify({ role: newRole }),
+  });
+  if (r.ok) {
+    const u = await r.json();
+    document.getElementById(`role-cell-${userId}`).innerHTML = roleBadge(u.role);
+    const idx = allUsers.findIndex(x => x.id === userId);
+    if (idx >= 0) allUsers[idx].role = u.role;
+    showAlert('Role updated.', 'success');
+  } else {
+    showAlert('Failed to update role.', 'error');
+  }
+}
+
+async function sendById(userId) {
+  const type = document.getElementById(`msg-type-${userId}`).value;
+  const r = await fetch(`/api/admin/alert/${userId}`, {
+    method: 'POST', headers: authHeaders(),
+    body: JSON.stringify({ notification_type: type }),
+  });
+  const label = type === 'rescue' ? 'Rescue dispatch' : 'Alert';
+  if (r.ok) { showAlert(`${label} sent to user #${userId}.`, 'success'); showToastSent(); }
+  else showAlert('Failed to send notification.', 'error');
+}
+
+async function sendTargetedAlert() {
+  const id   = document.getElementById('target-user-id').value;
+  const type = document.getElementById('targeted-type').value;
+  if (!id) { showAlert('Please enter a User ID.', 'error'); return; }
+  const r = await fetch(`/api/admin/alert/${parseInt(id)}`, {
+    method: 'POST', headers: authHeaders(),
+    body: JSON.stringify({ notification_type: type }),
+  });
+  const label = type === 'rescue' ? 'Rescue dispatch' : 'Alert';
+  if (r.ok) { showAlert(`${label} sent to user #${id}.`, 'success'); showToastSent(); }
+  else showAlert('Failed — user not found or insufficient permissions.', 'error');
+}
+
+function showAlert(msg, type) {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg;
+  el.className = `alert alert-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 5000);
+}
+
+function openBroadcastModal()  { document.getElementById('broadcast-modal').classList.add('show'); }
+function closeBroadcastModal() { document.getElementById('broadcast-modal').classList.remove('show'); }
+
+async function confirmBroadcast() {
+  const btn  = document.getElementById('confirm-broadcast-btn');
+  const type = document.getElementById('broadcast-type').value;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Sending...';
+  const r = await fetch('/api/admin/broadcast', {
+    method: 'POST', headers: authHeaders(),
+    body: JSON.stringify({ notification_type: type }),
+  });
+  const d = await r.json();
+  closeBroadcastModal();
+  const label = type === 'rescue' ? 'Rescue dispatch' : 'Alert';
+  showAlert(`${label} sent to ${d.sent_to} users.`, 'success');
+  showToastSent();
+  loadUsers();
+  btn.disabled = false;
+  btn.textContent = 'Send to Everyone';
+}
+
+(async () => {
+  const user = await loadCurrentUser();
+  if (!user) { window.location.href = '/login'; return; }
+  if (user.role !== 'admin') { window.location.href = '/map'; return; }
+  loadUsers();
+})();
+</script>
+{% endblock %}

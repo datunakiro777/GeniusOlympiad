@@ -1,0 +1,19 @@
+#dispatch-map {
+  height: 420px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.user-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-card-info { flex: 1; min-width: 0; }
+.user-card-info strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-card-info small  { color: var(--text-muted); font-size: .78rem; }

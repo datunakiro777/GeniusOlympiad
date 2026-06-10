@@ -1,1 +1,71 @@
 {% extends "base.html" %}
+{% block content %}
+<div class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+    <div>
+      <h1 style="margin-bottom:4px;">All Users</h1>
+      <p class="text-muted">{{ users|length }} registered user{{ 's' if users|length != 1 }}</p>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <a href="/map" class="btn btn-primary">Live Map</a>
+      <a href="/register" class="btn btn-outline">Register New</a>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Role</th>
+          <th>Safety Status</th>
+          <th>Location</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        <tr>
+          <td style="color:var(--text-muted);">#{{ user.id }}</td>
+          <td><strong>{{ user.name }} {{ user.last_name }}</strong></td>
+          <td>{{ user.email }}</td>
+          <td>{{ user.phone_number }}</td>
+          <td>
+            {% if user.role == 'admin' %}
+              <span class="nav-role-badge badge-admin">Admin</span>
+            {% elif user.role == 'police' %}
+              <span class="nav-role-badge badge-police">Police</span>
+            {% else %}
+              <span class="nav-role-badge badge-user">User</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="status-pill pill-{{ user.safety_status }}">
+              <span class="status-dot status-{{ user.safety_status }}"></span>
+              {{ user.safety_status }}
+            </span>
+          </td>
+          <td style="color:var(--text-muted);font-size:.82rem;">
+            {% if user.latitude %}
+              {{ "%.4f"|format(user.latitude) }}, {{ "%.4f"|format(user.longitude) }}
+            {% else %}
+              No data
+            {% endif %}
+          </td>
+          <td>
+            <a href="/users/{{ user.id }}" class="btn btn-outline btn-sm">View</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">No users registered yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

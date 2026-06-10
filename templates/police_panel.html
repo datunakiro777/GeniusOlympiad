@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="{{ url_for('static', path='/police.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+    <div>
+      <h1 style="margin-bottom:4px;">Police Dispatch</h1>
+      <p class="text-muted">Filter and locate users within a disaster zone radius</p>
+    </div>
+    <a href="/map" class="btn btn-outline">Back to Live Map</a>
+  </div>
+
+  <div id="alert-msg" class="alert" style="margin-bottom:16px;"></div>
+
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><h2>Geographic Filter</h2></div>
+    <div class="card-body">
+      <p class="text-muted" style="margin-bottom:16px;">Click on the map to set the disaster zone center, then adjust the radius to filter affected users.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:14px;align-items:end;flex-wrap:wrap;">
+        <div class="form-group" style="margin:0;">
+          <label>Center Latitude</label>
+          <input type="number" id="center-lat" class="form-control" placeholder="e.g. 40.7128" step="0.0001">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Center Longitude</label>
+          <input type="number" id="center-lng" class="form-control" placeholder="e.g. -74.0060" step="0.0001">
+        </div>
+        <button class="btn btn-police" onclick="applyFilter()" style="height:42px;">Apply Filter</button>
+      </div>
+      <div style="margin-top:16px;">
+        <label style="display:flex;justify-content:space-between;font-weight:600;font-size:.875rem;">
+          <span>Radius</span>
+          <span id="radius-label">50 km</span>
+        </label>
+        <input type="range" id="radius-km" min="1" max="500" value="50" style="width:100%;margin-top:6px;"
+               oninput="document.getElementById('radius-label').textContent=this.value+' km'; updateCircle();">
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+      <h2>Zone Map</h2>
+      <span class="text-muted" style="font-size:.8rem;">Click to set center point</span>
+    </div>
+    <div class="card-body" style="padding:16px;">
+      <div id="dispatch-map"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+      <h2>Users in Zone <span id="zone-count" style="color:var(--text-muted);font-weight:400;font-size:.9rem;"></span></h2>
+      <div id="broadcast-zone-controls" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
+        <select id="zone-broadcast-type" class="form-control" style="width:190px;padding:5px 10px;font-size:.82rem;height:34px;">
+          <option value="alert">Alert — Safety Check</option>
+          <option value="rescue">Rescue — Dispatch Notice</option>
+        </select>
+        <button class="btn btn-danger btn-sm" onclick="broadcastToZone()">Broadcast to Zone</button>
+      </div>
+    </div>
+    <div id="zone-users" class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+      <p class="text-muted">Apply a filter to see affected users.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const dmap = L.map('dispatch-map').setView([20, 0], 2);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap', maxZoom: 19,
+}).addTo(dmap);
+
+let centerMarker = null;
+let radiusCircle = null;
+let zoneUserIds  = [];
+let allUsers     = [];
+let currentUserId = null;
+
+dmap.on('click', (e) => {
+  document.getElementById('center-lat').value = e.latlng.lat.toFixed(5);
+  document.getElementById('center-lng').value = e.latlng.lng.toFixed(5);
+  updateCircle();
+  applyFilter();
+});
+
+function updateCircle() {
+  const lat = parseFloat(document.getElementById('center-lat').value);
+  const lng = parseFloat(document.getElementById('center-lng').value);
+  const km  = parseInt(document.getElementById('radius-km').value);
+  if (isNaN(lat) || isNaN(lng)) return;
+  if (centerMarker) dmap.removeLayer(centerMarker);
+  if (radiusCircle) dmap.removeLayer(radiusCircle);
+  centerMarker = L.marker([lat, lng], {
+    icon: L.divIcon({
+      html: '<div style="width:16px;height:16px;background:#7c3aed;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3);"></div>',
+      iconSize: [16, 16], iconAnchor: [8, 8], className: '',
+    })
+  }).addTo(dmap).bindPopup('Disaster Zone Center');
+  radiusCircle = L.circle([lat, lng], {
+    radius: km * 1000, color: '#7c3aed', weight: 2, fillColor: '#7c3aed', fillOpacity: .08,
+  }).addTo(dmap);
+  dmap.fitBounds(radiusCircle.getBounds(), { padding: [20, 20] });
+}
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function markerColor(s) {
+  return s === 'safe' ? '#16a34a' : s === 'danger' ? '#dc2626' : '#6b7280';
+}
+
+function makeIcon(s) {
+  const c = markerColor(s);
+  return L.divIcon({
+    html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="32" viewBox="0 0 28 36"><path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.27 21.73 0 14 0z" fill="${c}" stroke="#fff" stroke-width="2"/><circle cx="14" cy="14" r="6" fill="#fff"/></svg>`,
+    iconSize: [24, 32], iconAnchor: [12, 32], popupAnchor: [0, -32], className: '',
+  });
+}
+
+let userMarkers = {};
+
+async function applyFilter() {
+  const lat = parseFloat(document.getElementById('center-lat').value);
+  const lng = parseFloat(document.getElementById('center-lng').value);
+  const km  = parseInt(document.getElementById('radius-km').value);
+  if (isNaN(lat) || isNaN(lng)) { showAlert('Please set a center point.', 'error'); return; }
+  updateCircle();
+  if (!allUsers.length) {
+    const r = await fetch('/api/admin/users/map', { headers: authHeaders() });
+    if (!r.ok) { showAlert('Failed to load users.', 'error'); return; }
+    allUsers = await r.json();
+  }
+  Object.values(userMarkers).forEach(m => dmap.removeLayer(m));
+  userMarkers = {};
+  const inZone = allUsers.filter(u => u.latitude != null && haversineKm(lat, lng, u.latitude, u.longitude) <= km);
+  zoneUserIds = inZone.map(u => u.id);
+  inZone.forEach(u => {
+    userMarkers[u.id] = L.marker([u.latitude, u.longitude], { icon: makeIcon(u.safety_status) })
+      .addTo(dmap)
+      .bindPopup(`<strong>${u.name} ${u.last_name}</strong><br><span style="color:${markerColor(u.safety_status)};text-transform:capitalize;">${u.safety_status}</span><br><small>${u.phone_number}</small>`);
+  });
+  renderZoneUsers(inZone);
+}
+
+function statusPill(s) {
+  return `<span class="status-pill pill-${s}"><span class="status-dot status-${s}"></span>${s}</span>`;
+}
+
+function renderZoneUsers(users) {
+  const el = document.getElementById('zone-users');
+  document.getElementById('zone-count').textContent = `(${users.length} user${users.length !== 1 ? 's' : ''})`;
+  const controls = document.getElementById('broadcast-zone-controls');
+  controls.style.display = users.length ? 'flex' : 'none';
+  if (!users.length) {
+    el.innerHTML = '<p class="text-muted">No users with known locations in this zone.</p>';
+    return;
+  }
+  el.innerHTML = users.map(u => `
+    <div class="user-card" id="ucard-${u.id}">
+      <div class="status-dot status-${u.safety_status}" style="width:16px;height:16px;flex-shrink:0;"></div>
+      <div class="user-card-info">
+        <strong>${u.name} ${u.last_name}</strong>
+        <small>${u.email} · ${u.phone_number}</small>
+        <small style="display:block;">${u.latitude?.toFixed(4)}, ${u.longitude?.toFixed(4)}</small>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        ${statusPill(u.safety_status)}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+          <button class="btn btn-outline btn-sm" onclick="focusUser(${u.id},${u.latitude},${u.longitude})">Focus</button>
+          <select id="user-type-${u.id}" class="form-control" style="width:100px;padding:3px 7px;font-size:.76rem;height:28px;">
+            <option value="alert">Alert</option>
+            <option value="rescue">Rescue</option>
+          </select>
+          <button class="btn btn-police btn-sm" onclick="alertUser(${u.id})">Send</button>
+          ${u.safety_status === 'danger' ? `<button class="btn btn-danger btn-sm" onclick="dispatch911(${u.id})">Dispatch</button>` : ''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function focusUser(id, lat, lng) {
+  dmap.flyTo([lat, lng], 15, { animate: true, duration: 1 });
+  userMarkers[id]?.openPopup();
+}
+
+async function alertUser(userId) {
+  const typeEl = document.getElementById(`user-type-${userId}`);
+  const type = typeEl ? typeEl.value : 'alert';
+  const r = await fetch(`/api/admin/alert/${userId}`, {
+    method: 'POST', headers: authHeaders(),
+    body: JSON.stringify({ notification_type: type }),
+  });
+  const label = type === 'rescue' ? 'Rescue dispatch' : 'Alert';
+  if (r.ok) { showAlert(`${label} sent to user #${userId}.`, 'success'); showToastSent(); }
+  else showAlert('Failed to send notification.', 'error');
+}
+
+async function broadcastToZone() {
+  if (!zoneUserIds.length) return;
+  const type = document.getElementById('zone-broadcast-type').value;
+  const targets = zoneUserIds.filter(id => id !== currentUserId);
+  for (const id of targets) {
+    await fetch(`/api/admin/alert/${id}`, {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ notification_type: type }),
+    });
+  }
+  const label = type === 'rescue' ? 'Rescue dispatch' : 'Alert';
+  showAlert(`${label} sent to ${targets.length} user${targets.length !== 1 ? 's' : ''} in zone.`, 'success');
+  showToastSent();
+}
+
+function dispatch911(userId) {
+  const u = allUsers.find(x => x.id === userId);
+  const name = u ? `${u.name} ${u.last_name}` : `User #${userId}`;
+  const coords = u?.latitude != null ? `${u.latitude.toFixed(4)}, ${u.longitude.toFixed(4)}` : 'Unknown';
+  document.getElementById('emergency-modal').classList.add('show');
+  document.querySelector('#emergency-modal .modal-box p').innerHTML =
+    `Dispatching emergency services to <strong>${name}</strong> at coordinates <strong>${coords}</strong>.`;
+}
+
+function showAlert(msg, type) {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg;
+  el.className = `alert alert-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+(async () => {
+  const user = await loadCurrentUser();
+  if (!user) { window.location.href = '/login'; return; }
+  if (user.role !== 'admin' && user.role !== 'police') { window.location.href = '/map'; return; }
+  currentUserId = user.id;
+  const r = await fetch('/api/admin/users/map', { headers: authHeaders() });
+  if (r.ok) allUsers = await r.json();
+})();
+</script>
+{% endblock %}

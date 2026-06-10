@@ -1,2 +1,41 @@
 {% extends "base.html" %}
+{% block content %}
+<div class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+    <div>
+      <h1 style="margin-bottom:4px;">Location History</h1>
+      <p class="text-muted">{{ locations|length }} total record{{ 's' if locations|length != 1 }}</p>
+    </div>
+    <a href="/map" class="btn btn-primary">Live Map</a>
+  </div>
 
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>User ID</th>
+          <th>Latitude</th>
+          <th>Longitude</th>
+          <th>Timestamp</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for loc in locations %}
+        <tr>
+          <td style="color:var(--text-muted);">#{{ loc.id }}</td>
+          <td><a href="/users/{{ loc.user_id }}">#{{ loc.user_id }}</a></td>
+          <td>{{ "%.6f"|format(loc.latitude) }}</td>
+          <td>{{ "%.6f"|format(loc.longitude) }}</td>
+          <td style="color:var(--text-muted);font-size:.82rem;">{{ loc.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted);">No location records yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="{{ url_for('static', path='/map.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="map-page">
+  <div class="map-layout">
+    <div class="map-sidebar">
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Live Status</h2>
+          <span id="last-update" class="text-muted" style="font-size:.75rem;"></span>
+        </div>
+        <div class="card-body" style="padding:16px;">
+          <div class="stats-grid">
+            <div class="stat-card stat-safe">
+              <div class="stat-num" id="count-safe">—</div>
+              <div class="stat-label">Safe</div>
+            </div>
+            <div class="stat-card stat-danger">
+              <div class="stat-num" id="count-danger">—</div>
+              <div class="stat-label">Danger</div>
+            </div>
+            <div class="stat-card stat-unknown">
+              <div class="stat-num" id="count-unknown">—</div>
+              <div class="stat-label">Unknown</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="filter-controls" style="display:none;">
+        <div class="card-header"><h2>Show / Hide</h2></div>
+        <div class="card-body" style="padding:12px;">
+          <div class="filter-toggles">
+            <button class="toggle-btn active-safe" id="toggle-safe" onclick="toggleStatus('safe')">
+              <span class="dot" style="background:#16a34a;"></span>
+              <span class="toggle-label">Safe users</span>
+              <span class="eye-label">Visible</span>
+            </button>
+            <button class="toggle-btn active-danger" id="toggle-danger" onclick="toggleStatus('danger')">
+              <span class="dot" style="background:#dc2626;"></span>
+              <span class="toggle-label">Danger users</span>
+              <span class="eye-label">Visible</span>
+            </button>
+            <button class="toggle-btn active-unknown" id="toggle-unknown" onclick="toggleStatus('unknown')">
+              <span class="dot" style="background:#6b7280;"></span>
+              <span class="toggle-label">Unknown users</span>
+              <span class="eye-label">Visible</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2>Legend</h2></div>
+        <div class="card-body" style="padding:16px;">
+          <div class="legend-item"><div class="legend-dot" style="background:#16a34a;"></div> Safe — confirmed OK</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#dc2626;"></div> Danger — needs rescue</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#6b7280;"></div> Unknown — no response</div>
+        </div>
+      </div>
+
+      <div class="card" id="admin-controls" style="display:none;">
+        <div class="card-header"><h2>Controls</h2></div>
+        <div class="card-body" style="padding:16px;display:flex;flex-direction:column;gap:10px;">
+          <a href="/admin" class="btn btn-secondary btn-block" id="link-admin" style="display:none;">Admin Panel</a>
+          <a href="/police" class="btn btn-police btn-block">Police Dispatch</a>
+        </div>
+      </div>
+
+      <div class="card" style="max-height:320px;overflow:hidden;display:flex;flex-direction:column;">
+        <div class="card-header"><h2>Users</h2></div>
+        <div id="user-list" style="overflow-y:auto;flex:1;padding:8px 0;"></div>
+      </div>
+
+    </div>
+    <div id="map"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([20, 0], 2);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+  maxZoom: 19,
+}).addTo(map);
+
+const markers = {};
+const hiddenStatuses = new Set();
+
+function markerColor(status) {
+  return status === 'safe' ? '#16a34a' : status === 'danger' ? '#dc2626' : '#6b7280';
+}
+
+function makeIcon(status) {
+  const color = markerColor(status);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36"><path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.27 21.73 0 14 0z" fill="${color}" stroke="#fff" stroke-width="2"/><circle cx="14" cy="14" r="6" fill="#fff"/></svg>`;
+  return L.divIcon({ html: svg, iconSize: [28, 36], iconAnchor: [14, 36], popupAnchor: [0, -36], className: '' });
+}
+
+function updateMarker(u) {
+  if (u.latitude == null || u.longitude == null) return;
+  const pos = [u.latitude, u.longitude];
+  const popup = `<div style="min-width:160px;"><strong>${u.name}</strong><br><span style="color:${markerColor(u.safety_status)};font-weight:600;text-transform:capitalize;">${u.safety_status}</span><br><small style="color:#64748b;">${u.role} · ID ${u.id}</small><br><small>${u.latitude.toFixed(5)}, ${u.longitude.toFixed(5)}</small></div>`;
+  if (markers[u.id]) {
+    markers[u.id].setLatLng(pos).setIcon(makeIcon(u.safety_status)).setPopupContent(popup);
+  } else {
+    markers[u.id] = L.marker(pos, { icon: makeIcon(u.safety_status) }).bindPopup(popup);
+  }
+  markers[u.id]._statusCache = u.safety_status;
+  if (hiddenStatuses.has(u.safety_status)) {
+    markers[u.id].remove();
+  } else {
+    markers[u.id].addTo(map);
+  }
+}
+
+function toggleStatus(status) {
+  hiddenStatuses.has(status) ? hiddenStatuses.delete(status) : hiddenStatuses.add(status);
+  const btn = document.getElementById(`toggle-${status}`);
+  const label = btn.querySelector('.eye-label');
+  if (hiddenStatuses.has(status)) {
+    btn.className = 'toggle-btn hidden-status';
+    label.textContent = 'Hidden';
+  } else {
+    btn.className = `toggle-btn active-${status}`;
+    label.textContent = 'Visible';
+  }
+  Object.values(markers).forEach(marker => {
+    if (!marker._statusCache) return;
+    hiddenStatuses.has(marker._statusCache) ? marker.remove() : marker.addTo(map);
+  });
+}
+
+async function refreshMap() {
+  if (!getToken()) { window.location.href = '/login'; return; }
+  try {
+    const r = await fetch('/api/admin/users/map', { headers: authHeaders() });
+    if (r.status === 401) { window.location.href = '/login'; return; }
+    const users = await r.json();
+    let safe = 0, danger = 0, unknown = 0;
+    const listEl = document.getElementById('user-list');
+    listEl.innerHTML = '';
+    users.forEach(u => {
+      if (u.safety_status === 'safe') safe++;
+      else if (u.safety_status === 'danger') danger++;
+      else unknown++;
+      updateMarker(u);
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;';
+      row.innerHTML = `<span class="status-dot status-${u.safety_status}"></span><span style="font-size:.85rem;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${u.name}</span><span style="font-size:.75rem;color:#64748b;text-transform:capitalize;">${u.role}</span>`;
+      row.addEventListener('click', () => {
+        if (u.latitude != null && !hiddenStatuses.has(u.safety_status)) {
+          map.flyTo([u.latitude, u.longitude], 14, { animate: true, duration: 1 });
+          markers[u.id]?.openPopup();
+        }
+      });
+      listEl.appendChild(row);
+    });
+    document.getElementById('count-safe').textContent    = safe;
+    document.getElementById('count-danger').textContent  = danger;
+    document.getElementById('count-unknown').textContent = unknown;
+    document.getElementById('last-update').textContent   = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (e) { console.error(e); }
+}
+
+async function setupMapUI() {
+  if (!getToken()) { window.location.href = '/login'; return; }
+  const user = await loadCurrentUser();
+  if (!user) { window.location.href = '/login'; return; }
+  if (user.role === 'admin' || user.role === 'police') {
+    document.getElementById('admin-controls').style.display = '';
+    document.getElementById('filter-controls').style.display = '';
+  }
+  if (user.role === 'admin') {
+    document.getElementById('link-admin').style.display = '';
+  }
+  if (user.latitude != null) map.setView([user.latitude, user.longitude], 13);
+  await refreshMap();
+  setInterval(refreshMap, 30000);
+}
+
+setupMapUI();
+</script>
+{% endblock %}

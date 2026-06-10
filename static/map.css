@@ -1,0 +1,61 @@
+main { display: block; }
+
+.map-page { padding: 16px; max-width: 100%; }
+
+.map-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.map-sidebar { display: flex; flex-direction: column; gap: 14px; }
+
+#map {
+  height: calc(100vh - 140px);
+  min-height: 480px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  z-index: 1;
+}
+
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  text-align: center;
+}
+.stat-num   { font-size: 2rem; font-weight: 800; line-height: 1; }
+.stat-label { font-size: .78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
+.stat-safe    .stat-num { color: var(--safe); }
+.stat-danger  .stat-num { color: var(--danger); }
+.stat-unknown .stat-num { color: var(--unknown); }
+
+.legend-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: .875rem; }
+.legend-dot  { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+
+.filter-toggles { display: flex; flex-direction: column; gap: 8px; }
+
+.toggle-btn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 13px;
+  border: 2px solid var(--border); border-radius: 7px;
+  background: var(--surface); cursor: pointer;
+  font: inherit; font-size: .85rem; font-weight: 600;
+  transition: all .15s; text-align: left;
+}
+.toggle-btn .dot { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; }
+.toggle-btn .toggle-label { flex: 1; }
+.toggle-btn.active-safe    { border-color: #16a34a; background: #dcfce7; }
+.toggle-btn.active-danger  { border-color: #dc2626; background: #fee2e2; }
+.toggle-btn.active-unknown { border-color: #6b7280; background: #f1f5f9; }
+.toggle-btn.hidden-status  { opacity: .45; background: var(--surface-2); border-style: dashed; }
+
+@media (max-width: 768px) {
+  .map-layout { grid-template-columns: 1fr; }
+  #map { height: 55vh; }
+}

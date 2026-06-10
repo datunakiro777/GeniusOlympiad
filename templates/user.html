@@ -1,1 +1,149 @@
 {% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="{{ url_for('static', path='/user.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div style="margin-bottom:20px;">
+    <a href="/users" class="btn btn-outline btn-sm">Back to Users</a>
+  </div>
+
+  <div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start;">
+
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-body" style="text-align:center;padding:32px 24px;">
+          <div style="width:72px;height:72px;border-radius:50%;background:var(--brand-light);color:var(--brand);font-size:1.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+            {{ user.name[0] }}{{ user.last_name[0] }}
+          </div>
+          <h2 style="margin-bottom:4px;">{{ user.name }} {{ user.last_name }}</h2>
+          <p class="text-muted" style="margin-bottom:16px;">ID #{{ user.id }}</p>
+          <span class="status-pill pill-{{ user.safety_status }}" style="font-size:.9rem;padding:6px 16px;">
+            <span class="status-dot status-{{ user.safety_status }}"></span>
+            {{ user.safety_status | capitalize }}
+          </span>
+        </div>
+        <div style="border-top:1px solid var(--border);padding:16px 20px;display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:.875rem;">
+            <span class="text-muted">Email</span>
+            <span>{{ user.email }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:.875rem;">
+            <span class="text-muted">Phone</span>
+            <span>{{ user.phone_number }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:.875rem;">
+            <span class="text-muted">Age</span>
+            <span>{{ user.age }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:.875rem;align-items:center;">
+            <span class="text-muted">Role</span>
+            {% if user.role == 'admin' %}
+              <span class="nav-role-badge badge-admin">Admin</span>
+            {% elif user.role == 'police' %}
+              <span class="nav-role-badge badge-police">Police</span>
+            {% else %}
+              <span class="nav-role-badge badge-user">User</span>
+            {% endif %}
+          </div>
+          {% if user.latitude %}
+          <div style="display:flex;justify-content:space-between;font-size:.875rem;">
+            <span class="text-muted">Last Known</span>
+            <span>{{ "%.4f"|format(user.latitude) }}, {{ "%.4f"|format(user.longitude) }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card" id="admin-actions" style="display:none;">
+        <div class="card-header"><h2>Actions</h2></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
+          <button class="btn btn-outline btn-block" onclick="sendAlert({{ user.id }})">Send Safety Check</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      {% if user.latitude %}
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-header"><h2>Current Location</h2></div>
+        <div class="card-body" style="padding:12px;">
+          <div id="user-map"></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Location History</h2>
+          <span class="text-muted" style="font-size:.85rem;">{{ locations|length }} record{{ 's' if locations|length != 1 }}</span>
+        </div>
+        <div class="table-wrap" style="border:none;border-radius:0;">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Latitude</th>
+                <th>Longitude</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for loc in locations %}
+              <tr>
+                <td style="color:var(--text-muted);">{{ loc.id }}</td>
+                <td>{{ "%.6f"|format(loc.latitude) }}</td>
+                <td>{{ "%.6f"|format(loc.longitude) }}</td>
+                <td style="color:var(--text-muted);font-size:.82rem;">{{ loc.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="4" style="text-align:center;padding:32px;color:var(--text-muted);">No location history yet.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if user.latitude %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const umap = L.map('user-map').setView([{{ user.latitude }}, {{ user.longitude }}], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(umap);
+const color = '{{ user.safety_status }}' === 'safe' ? '#16a34a' : '{{ user.safety_status }}' === 'danger' ? '#dc2626' : '#6b7280';
+const icon = L.divIcon({
+  html: `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36"><path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.27 21.73 0 14 0z" fill="${color}" stroke="#fff" stroke-width="2"/><circle cx="14" cy="14" r="6" fill="#fff"/></svg>`,
+  iconSize:[28,36], iconAnchor:[14,36], popupAnchor:[0,-36], className:'',
+});
+L.marker([{{ user.latitude }}, {{ user.longitude }}], { icon })
+  .addTo(umap)
+  .bindPopup('<strong>{{ user.name }} {{ user.last_name }}</strong>')
+  .openPopup();
+</script>
+{% endif %}
+<script>
+async function sendAlert(userId) {
+  const r = await fetch(`/api/admin/alert/${userId}`, {
+    method: 'POST', headers: authHeaders(),
+    body: JSON.stringify({ notification_type: 'alert' }),
+  });
+  if (r.ok) showToastSent();
+  else alert('Failed — admin or police access required.');
+}
+
+(async () => {
+  const user = await loadCurrentUser();
+  if (user && (user.role === 'admin' || user.role === 'police')) {
+    document.getElementById('admin-actions').style.display = '';
+  }
+})();
+</script>
+{% endblock %}

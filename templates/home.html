@@ -1,5 +1,62 @@
 {% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', path='/home.css') }}">
+{% endblock %}
 
 {% block content %}
+<div class="page">
+  <div class="hero">
+    <h1>Disaster Relief Response System</h1>
+    <p>Real-time location tracking and safety coordination for first responders during natural disasters and emergencies.</p>
+    <div class="hero-actions">
+      <a href="/register" class="btn btn-lg btn-hero-primary">Get Started</a>
+      <a href="/login" class="btn btn-lg btn-hero-outline">Sign In</a>
+    </div>
+  </div>
 
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h3>Live Map Tracking</h3>
+      <p>GPS coordinates updated every 3 minutes. Color-coded markers show safety status at a glance.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Safety Broadcasts</h3>
+      <p>Admins can send instant safety check notifications globally or to specific individuals.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Police Dispatch</h3>
+      <p>Filter users by geographic radius to focus rescue operations on the affected disaster zone.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Instant Alerts</h3>
+      <p>When a user reports danger, their marker turns red instantly and emergency dispatch is triggered.</p>
+    </div>
+  </div>
+
+  <div style="margin-top:32px;" class="card">
+    <div class="card-body" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+      <div>
+        <h2 style="margin-bottom:8px;">How Status Works</h2>
+        <p class="text-muted" style="margin-bottom:16px;">Every user is assigned one of three safety states:</p>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="status-pill pill-safe"><span class="status-dot status-safe"></span>Safe</span>
+            <span class="text-muted">User confirmed they are safe and unharmed.</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="status-pill pill-danger"><span class="status-dot status-danger"></span>Danger</span>
+            <span class="text-muted">User needs immediate help — responders dispatched.</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="status-pill pill-unknown"><span class="status-dot status-unknown"></span>Unknown</span>
+            <span class="text-muted">No response received — location must be checked.</span>
+          </div>
+        </div>
+      </div>
+      <div style="margin-left:auto;text-align:center;">
+        <a href="/map" class="btn btn-primary btn-lg">Open Live Map</a>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

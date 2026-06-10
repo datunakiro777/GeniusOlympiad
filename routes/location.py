@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import models
+import models as models
 from database import get_db
 from schemas import UserLocationHistoryResponse
 
@@ -15,8 +15,7 @@ router = APIRouter()
 @router.get("/locations", response_model=list[UserLocationHistoryResponse])
 async def get_all_locations(db: Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(select(models.UserLocationHistory))
-    locations = result.scalars().all()
-    return locations
+    return result.scalars().all()
 
 
 @router.get("/locations/{id}", response_model=UserLocationHistoryResponse)

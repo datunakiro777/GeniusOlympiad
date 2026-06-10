@@ -1,5 +1,21 @@
 {% extends "base.html" %}
-
 {% block content %}
-
+<div class="page" style="min-height:60vh;display:flex;align-items:center;justify-content:center;">
+  <div class="card" style="max-width:480px;width:100%;text-align:center;">
+    <div class="card-body" style="padding:48px 32px;">
+      <h1 style="font-size:3rem;font-weight:900;color:var(--text-muted);margin-bottom:8px;">{{ status_code }}</h1>
+      <h2 style="margin-bottom:12px;">
+        {% if status_code == 404 %}Page Not Found
+        {% elif status_code == 403 %}Access Denied
+        {% elif status_code == 401 %}Unauthorized
+        {% else %}Something Went Wrong{% endif %}
+      </h2>
+      <p class="text-muted" style="margin-bottom:28px;">{{ message }}</p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <a href="/" class="btn btn-primary">Go Home</a>
+        <button class="btn btn-outline" onclick="history.back()">Go Back</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

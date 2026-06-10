@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -25,6 +26,10 @@ class UserPublic(UserBase):
 
     id: int
     current_location: str
+    role: str
+    safety_status: str
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class UserLocationHistoryBase(BaseModel):
@@ -55,3 +60,21 @@ class UserPrivate(BaseModel):
     id: int
     email: EmailStr = Field(max_length=120)
     password_hash: str
+
+
+class RoleUpdate(BaseModel):
+    role: Literal["normal_user", "admin", "police"]
+
+
+class SafetyStatusUpdate(BaseModel):
+    safety_status: Literal["safe", "danger", "unknown"]
+
+
+class SafetyNotificationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    status: str
+    sent_at: datetime
+    responded_at: datetime | None = None

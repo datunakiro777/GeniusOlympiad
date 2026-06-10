@@ -1,1 +1,114 @@
 {% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', path='/auth.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrap">
+  <div class="auth-card" style="max-width:520px;">
+    <h1>Create account</h1>
+    <p class="subtitle">Join DisasterTrack to stay safe and connected</p>
+
+    <div id="alert-error" class="alert alert-error"></div>
+    <div id="alert-success" class="alert alert-success"></div>
+
+    <form id="register-form">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="form-group">
+          <label for="name">First Name</label>
+          <input type="text" id="name" class="form-control" placeholder="John" required minlength="2" maxlength="20">
+        </div>
+        <div class="form-group">
+          <label for="last_name">Last Name</label>
+          <input type="text" id="last_name" class="form-control" placeholder="Doe" required minlength="2" maxlength="20">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="email">Email address</label>
+        <input type="email" id="email" class="form-control" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="form-group">
+          <label for="age">Age</label>
+          <input type="number" id="age" class="form-control" placeholder="25" min="1" max="99" required>
+        </div>
+        <div class="form-group">
+          <label for="phone_number">Phone Number</label>
+          <input type="tel" id="phone_number" class="form-control" placeholder="+1 555 0100" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" class="form-control" placeholder="Minimum 8 characters" required minlength="8" autocomplete="new-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block btn-lg" id="submit-btn">Create Account</button>
+    </form>
+
+    <div class="auth-footer">
+      Already have an account? <a href="/login">Sign in</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('submit-btn');
+  const errEl = document.getElementById('alert-error');
+  const okEl  = document.getElementById('alert-success');
+  errEl.classList.remove('show');
+  okEl.classList.remove('show');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Creating account...';
+
+  const payload = {
+    name:         document.getElementById('name').value.trim(),
+    last_name:    document.getElementById('last_name').value.trim(),
+    email:        document.getElementById('email').value.trim(),
+    age:          parseInt(document.getElementById('age').value),
+    phone_number: document.getElementById('phone_number').value.trim(),
+    password:     document.getElementById('password').value,
+  };
+
+  try {
+    const r = await fetch('/api/users/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      const msg = Array.isArray(data.detail)
+        ? data.detail.map(d => d.msg).join(' · ')
+        : (data.detail || 'Registration failed.');
+      errEl.textContent = msg;
+      errEl.classList.add('show');
+      return;
+    }
+    okEl.textContent = 'Account created. Signing you in...';
+    okEl.classList.add('show');
+    const loginBody = new URLSearchParams({ username: payload.email, password: payload.password });
+    const lr = await fetch('/api/users/token', { method: 'POST', body: loginBody });
+    if (lr.ok) {
+      const td = await lr.json();
+      setToken(td.access_token);
+      await loadCurrentUser();
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => sendLocation(pos), () => {});
+      }
+      window.location.href = '/map';
+    } else {
+      window.location.href = '/login';
+    }
+  } catch {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Create Account';
+  }
+});
+</script>
+{% endblock %}

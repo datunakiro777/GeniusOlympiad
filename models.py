@@ -18,6 +18,7 @@ class User(Base):
     age: Mapped[int] = mapped_column(Integer, nullable=False)
     current_location: Mapped[str] = mapped_column(String(100), default="Unknown")
     phone_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     location_history: Mapped[list[UserLocationHistory]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 

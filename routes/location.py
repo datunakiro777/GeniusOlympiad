@@ -12,14 +12,14 @@ from schemas import UserLocationHistoryResponse
 router = APIRouter()
 
 
-@router.get("/locations", response_model=list[UserLocationHistoryResponse])
+@router.get("", response_model=list[UserLocationHistoryResponse])
 async def get_all_locations(db: Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(select(models.UserLocationHistory))
     locations = result.scalars().all()
     return locations
 
 
-@router.get("/locations/{id}", response_model=UserLocationHistoryResponse)
+@router.get("/{id}", response_model=UserLocationHistoryResponse)
 async def get_location(id: int, db: Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(select(models.UserLocationHistory).where(models.UserLocationHistory.id == id))
     location = result.scalars().first()

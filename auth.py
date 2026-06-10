@@ -8,7 +8,7 @@ from config import settings
 
 
 password_hash = PasswordHash.recommended()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/users/token")
 
 
 
@@ -21,20 +21,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """Create a JWT access token."""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(UTC) + timedelta(
-            minutes=settings.access_token_expire_minutes,
-        )
+        expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(
-        to_encode,
-        settings.secret_key.get_secret_value(),
-        algorithm=settings.algorithm,
-    )
+    encoded_jwt = jwt.encode(to_encode, settings.secret_key.get_secret_value(), algorithm=settings.algorithm)
     return encoded_jwt
 
 

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} | GeniusOlympiad</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="{{ url_for('home') }}">GeniusOlympiad</a>
+    <nav>
+      <a href="{{ url_for('users_page') }}">Users</a>
+      <a href="{{ url_for('locations_page') }}">Locations</a>
+      <a href="{{ url_for('login_page') }}">Login</a>
+      <a href="{{ url_for('register_page') }}">Register</a>
+      <a href="/docs">API Docs</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -87,6 +87,14 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const map = L.map('map').setView([20, 0], 2);
+
+function formatRole(role) {
+  return { normal_user: 'User', admin: 'Admin', police: 'Police' }[role] ?? role;
+}
+
+function formatStatus(status) {
+  return { safe: 'Safe', danger: 'Danger', unknown: 'Unknown' }[status] ?? status;
+}
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
   maxZoom: 19,
@@ -105,15 +113,30 @@ function makeIcon(status) {
   return L.divIcon({ html: svg, iconSize: [28, 36], iconAnchor: [14, 36], popupAnchor: [0, -36], className: '' });
 }
 
+function buildPopup(u) {
+  const zoomed = map.getZoom() >= 10;
+  const profileBtn = zoomed
+    ? `<div style="margin-top:10px;"><a href="/users/${u.id}" class="btn btn-primary btn-sm" style="width:100%;justify-content:center;">View Profile</a></div>`
+    : `<div style="margin-top:8px;font-size:.75rem;color:#94a3b8;">Zoom in to view profile</div>`;
+  return `<div style="min-width:170px;">
+    <strong>${u.name}</strong>
+    <br><span style="color:${markerColor(u.safety_status)};font-weight:600;">${formatStatus(u.safety_status)}</span>
+    <br><small style="color:#64748b;">${formatRole(u.role)} · ID ${u.id}</small>
+    <br><small>${u.latitude.toFixed(5)}, ${u.longitude.toFixed(5)}</small>
+    ${profileBtn}
+  </div>`;
+}
+
 function updateMarker(u) {
   if (u.latitude == null || u.longitude == null) return;
   const pos = [u.latitude, u.longitude];
-  const popup = `<div style="min-width:160px;"><strong>${u.name}</strong><br><span style="color:${markerColor(u.safety_status)};font-weight:600;text-transform:capitalize;">${u.safety_status}</span><br><small style="color:#64748b;">${u.role} · ID ${u.id}</small><br><small>${u.latitude.toFixed(5)}, ${u.longitude.toFixed(5)}</small></div>`;
   if (markers[u.id]) {
-    markers[u.id].setLatLng(pos).setIcon(makeIcon(u.safety_status)).setPopupContent(popup);
+    markers[u.id].setLatLng(pos).setIcon(makeIcon(u.safety_status));
   } else {
-    markers[u.id] = L.marker(pos, { icon: makeIcon(u.safety_status) }).bindPopup(popup);
+    markers[u.id] = L.marker(pos, { icon: makeIcon(u.safety_status) })
+      .bindPopup(() => buildPopup(u));
   }
+  markers[u.id]._user = u;
   markers[u.id]._statusCache = u.safety_status;
   if (hiddenStatuses.has(u.safety_status)) {
     markers[u.id].remove();
@@ -121,6 +144,12 @@ function updateMarker(u) {
     markers[u.id].addTo(map);
   }
 }
+
+map.on('zoomend', () => {
+  Object.values(markers).forEach(m => {
+    if (m.isPopupOpen()) m.setPopupContent(buildPopup(m._user));
+  });
+});
 
 function toggleStatus(status) {
   hiddenStatuses.has(status) ? hiddenStatuses.delete(status) : hiddenStatuses.add(status);
@@ -155,7 +184,8 @@ async function refreshMap() {
       updateMarker(u);
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;';
-      row.innerHTML = `<span class="status-dot status-${u.safety_status}"></span><span style="font-size:.85rem;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${u.name}</span><span style="font-size:.75rem;color:#64748b;text-transform:capitalize;">${u.role}</span>`;
+      const noLoc = u.latitude == null;
+      row.innerHTML = `<span class="status-dot status-${u.safety_status}" title="${formatStatus(u.safety_status)}"></span><span style="font-size:.85rem;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;${noLoc ? 'color:#94a3b8;' : ''}">${u.name}${noLoc ? ' <span title="No location data" style="font-size:.7rem;">📍?</span>' : ''}</span><span style="font-size:.75rem;color:#64748b;">${formatRole(u.role)}</span>`;
       row.addEventListener('click', () => {
         if (u.latitude != null && !hiddenStatuses.has(u.safety_status)) {
           map.flyTo([u.latitude, u.longitude], 14, { animate: true, duration: 1 });

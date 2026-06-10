@@ -8,9 +8,10 @@
   <div class="hero">
     <h1>Disaster Relief Response System</h1>
     <p>Real-time location tracking and safety coordination for first responders during natural disasters and emergencies.</p>
-    <div class="hero-actions">
-      <a href="/register" class="btn btn-lg btn-hero-primary">Get Started</a>
-      <a href="/login" class="btn btn-lg btn-hero-outline">Sign In</a>
+    <div class="hero-actions" id="hero-actions">
+      <a href="/register" class="btn btn-lg btn-hero-primary" id="hero-register">Get Started</a>
+      <a href="/login" class="btn btn-lg btn-hero-outline" id="hero-login">Sign In</a>
+      <a href="/map" class="btn btn-lg btn-hero-primary" id="hero-map" style="display:none">Open Live Map</a>
     </div>
   </div>
 
@@ -59,4 +60,17 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(async () => {
+  const user = await loadCurrentUser();
+  if (user) {
+    document.getElementById('hero-register').style.display = 'none';
+    document.getElementById('hero-login').style.display = 'none';
+    document.getElementById('hero-map').style.display = '';
+  }
+})();
+</script>
 {% endblock %}

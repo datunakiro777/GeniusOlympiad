@@ -20,7 +20,6 @@ LocationProvider = Callable[[int], Location | Awaitable[Location]]
 
 
 async def save_user_location(user_id: int, location: Location) -> None:
-    """Save the user's latest location and append one history row."""
     async with SessionLocal() as db:
         user = await db.get(User, user_id)
         if user is None:

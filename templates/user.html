@@ -7,16 +7,16 @@
 {% block content %}
 <div class="page">
   <div style="margin-bottom:20px;">
-    <a href="/users" class="btn btn-outline btn-sm">Back to Users</a>
+    <button onclick="history.length > 1 ? history.back() : window.location.href='/users'" class="btn btn-outline btn-sm">← Back</button>
   </div>
 
-  <div style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start;">
+  <div style="display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start;" class="user-layout">
 
     <div>
       <div class="card" style="margin-bottom:16px;">
         <div class="card-body" style="text-align:center;padding:32px 24px;">
           <div style="width:72px;height:72px;border-radius:50%;background:var(--brand-light);color:var(--brand);font-size:1.8rem;font-weight:800;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-            {{ user.name[0] }}{{ user.last_name[0] }}
+            {{ (user.name or '?')[0] | upper }}{{ (user.last_name or '?')[0] | upper }}
           </div>
           <h2 style="margin-bottom:4px;">{{ user.name }} {{ user.last_name }}</h2>
           <p class="text-muted" style="margin-bottom:16px;">ID #{{ user.id }}</p>
@@ -48,7 +48,7 @@
               <span class="nav-role-badge badge-user">User</span>
             {% endif %}
           </div>
-          {% if user.latitude %}
+          {% if user.latitude is not none and user.longitude is not none %}
           <div style="display:flex;justify-content:space-between;font-size:.875rem;">
             <span class="text-muted">Last Known</span>
             <span>{{ "%.4f"|format(user.latitude) }}, {{ "%.4f"|format(user.longitude) }}</span>
@@ -60,17 +60,24 @@
       <div class="card" id="admin-actions" style="display:none;">
         <div class="card-header"><h2>Actions</h2></div>
         <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
-          <button class="btn btn-outline btn-block" onclick="sendAlert({{ user.id }})">Send Safety Check</button>
+          <button class="btn btn-outline btn-block" onclick="sendNotification({{ user.id }}, 'alert')"> Send Safety Check</button>
+          <button class="btn btn-danger btn-block" onclick="sendNotification({{ user.id }}, 'rescue')"> Dispatch Rescue</button>
         </div>
       </div>
     </div>
 
     <div>
-      {% if user.latitude %}
+      {% if user.latitude is not none and user.longitude is not none %}
       <div class="card" style="margin-bottom:20px;">
         <div class="card-header"><h2>Current Location</h2></div>
         <div class="card-body" style="padding:12px;">
-          <div id="user-map"></div>
+          <div
+            id="user-map"
+            data-lat="{{ user.latitude }}"
+            data-lng="{{ user.longitude }}"
+            data-status="{{ user.safety_status }}"
+            data-name="{{ user.name }} {{ user.last_name }}"
+          ></div>
         </div>
       </div>
       {% endif %}
@@ -113,35 +120,52 @@
 {% endblock %}
 
 {% block scripts %}
-{% if user.latitude %}
+{% if user.latitude is not none and user.longitude is not none %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const umap = L.map('user-map').setView([{{ user.latitude }}, {{ user.longitude }}], 14);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(umap);
-const color = '{{ user.safety_status }}' === 'safe' ? '#16a34a' : '{{ user.safety_status }}' === 'danger' ? '#dc2626' : '#6b7280';
-const icon = L.divIcon({
-  html: `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36"><path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.27 21.73 0 14 0z" fill="${color}" stroke="#fff" stroke-width="2"/><circle cx="14" cy="14" r="6" fill="#fff"/></svg>`,
-  iconSize:[28,36], iconAnchor:[14,36], popupAnchor:[0,-36], className:'',
-});
-L.marker([{{ user.latitude }}, {{ user.longitude }}], { icon })
-  .addTo(umap)
-  .bindPopup('<strong>{{ user.name }} {{ user.last_name }}</strong>')
-  .openPopup();
+const mapElement = document.getElementById('user-map');
+if (mapElement) {
+  const latitude = Number(mapElement.dataset.lat);
+  const longitude = Number(mapElement.dataset.lng);
+
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    const umap = L.map(mapElement).setView([latitude, longitude], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(umap);
+
+    const STATUS_COLORS = { safe: '#16a34a', danger: '#dc2626', unknown: '#6b7280' };
+    const color = STATUS_COLORS[mapElement.dataset.status] ?? '#6b7280';
+    const icon = L.divIcon({
+      html: `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36"><path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.27 21.73 0 14 0z" fill="${color}" stroke="#fff" stroke-width="2"/><circle cx="14" cy="14" r="6" fill="#fff"/></svg>`,
+      iconSize: [28, 36],
+      iconAnchor: [14, 36],
+      popupAnchor: [0, -36],
+      className: '',
+    });
+
+    const popupName = document.createElement('strong');
+    popupName.textContent = mapElement.dataset.name || 'User';
+
+    L.marker([latitude, longitude], { icon })
+      .addTo(umap)
+      .bindPopup(popupName)
+      .openPopup();
+  }
+}
 </script>
 {% endif %}
 <script>
-async function sendAlert(userId) {
+async function sendNotification(userId, type) {
   const r = await fetch(`/api/admin/alert/${userId}`, {
     method: 'POST', headers: authHeaders(),
-    body: JSON.stringify({ notification_type: 'alert' }),
+    body: JSON.stringify({ notification_type: type }),
   });
   if (r.ok) showToastSent();
   else alert('Failed — admin or police access required.');
 }
 
 (async () => {
-  const user = await loadCurrentUser();
-  if (user && (user.role === 'admin' || user.role === 'police')) {
+  const currentUser = await loadCurrentUser();
+  if (currentUser?.role === 'admin' || currentUser?.role === 'police') {
     document.getElementById('admin-actions').style.display = '';
   }
 })();

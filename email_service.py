@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def _send_blocking(to_email: str, subject: str, html_body: str) -> bool:
-    """Blocking SMTP send — always run via asyncio.to_thread, never directly in an async handler."""
+    
     if not settings.smtp_user or not settings.smtp_password:
         logger.warning("SMTP not configured — skipping email to %s (subject: %s)", to_email, subject)
         return False
@@ -35,31 +35,26 @@ def _send_blocking(to_email: str, subject: str, html_body: str) -> bool:
 
 
 async def _send(to_email: str, subject: str, html_body: str) -> bool:
-    """Async wrapper — runs the blocking SMTP call in a thread pool."""
     return await asyncio.to_thread(_send_blocking, to_email, subject, html_body)
 
 
 async def send_alert_email(recipient_email: str, recipient_name: str) -> bool:
-    """
-    Safety-check alert email.
-    Sent when an admin/police broadcasts or targets a user to confirm their status.
-    """
     subject = "🔔 Safety Check — Please Confirm Your Status"
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
       <div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);padding:28px 32px;text-align:center;">
         <div style="font-size:2.5rem;">🚨</div>
-        <h1 style="color:#fff;margin:12px 0 4px;font-size:1.4rem;">DisasterTrack</h1>
+        <h1 style="color:#fff;margin:12px 0 4px;font-size:1.4rem;">ResQmap</h1>
         <p style="color:rgba(255,255,255,.8);margin:0;font-size:.9rem;">Emergency Coordination System</p>
       </div>
       <div style="padding:32px;">
         <h2 style="color:#0f172a;margin:0 0 12px;">Safety Check Alert</h2>
         <p style="color:#334155;">Hi <strong>{recipient_name}</strong>,</p>
-        <p style="color:#334155;">Emergency responders have sent you a <strong>safety check</strong>. Please log in to DisasterTrack and confirm your current status immediately.</p>
+        <p style="color:#334155;">Emergency responders have sent you a <strong>safety check</strong>. Please log in to ResQmap and confirm your current status immediately.</p>
         <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:18px;margin:24px 0;">
           <p style="margin:0;color:#1e40af;font-weight:600;">What to do:</p>
           <ul style="color:#1e40af;margin:8px 0 0;padding-left:20px;">
-            <li>Open the DisasterTrack app</li>
+            <li>Open the ResQmap app</li>
             <li>Respond to the safety check notification</li>
             <li>Tap <strong>✅ I'm Safe</strong> or <strong>🆘 I Need Help</strong></li>
           </ul>
@@ -67,7 +62,7 @@ async def send_alert_email(recipient_email: str, recipient_name: str) -> bool:
         <p style="color:#64748b;font-size:.875rem;">If you do not respond, your status will remain <strong>Unknown</strong> and rescue teams may be dispatched to your last known location.</p>
       </div>
       <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;text-align:center;">
-        <p style="margin:0;color:#94a3b8;font-size:.78rem;">DisasterTrack Emergency Coordination · Do not reply to this email</p>
+        <p style="margin:0;color:#94a3b8;font-size:.78rem;">ResQmap Emergency Coordination · Do not reply to this email</p>
       </div>
     </div>
     """
@@ -75,16 +70,12 @@ async def send_alert_email(recipient_email: str, recipient_name: str) -> bool:
 
 
 async def send_rescue_email(recipient_email: str, recipient_name: str, coords: str = "Unknown") -> bool:
-    """
-    Rescue dispatch email.
-    Sent when emergency services are being dispatched to a user in danger.
-    """
     subject = "🚨 Rescue Dispatch — Emergency Services Are On Their Way"
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
       <div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:28px 32px;text-align:center;">
         <div style="font-size:2.5rem;">🚑</div>
-        <h1 style="color:#fff;margin:12px 0 4px;font-size:1.4rem;">DisasterTrack</h1>
+        <h1 style="color:#fff;margin:12px 0 4px;font-size:1.4rem;">ResQmap</h1>
         <p style="color:rgba(255,255,255,.8);margin:0;font-size:.9rem;">Emergency Coordination System</p>
       </div>
       <div style="padding:32px;">
@@ -107,7 +98,7 @@ async def send_rescue_email(recipient_email: str, recipient_name: str, coords: s
         <p style="color:#64748b;font-size:.875rem;">Rescue teams can see your real-time location on the dispatch map. Help is on the way.</p>
       </div>
       <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;text-align:center;">
-        <p style="margin:0;color:#94a3b8;font-size:.78rem;">DisasterTrack Emergency Coordination · Do not reply to this email</p>
+        <p style="margin:0;color:#94a3b8;font-size:.78rem;">ResQmap Emergency Coordination · Do not reply to this email</p>
       </div>
     </div>
     """

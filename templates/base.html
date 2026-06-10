@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ title }} | DisasterTrack</title>
+  <title>{{ title }} | ResQmap</title>
   <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
   {% block head %}{% endblock %}
 </head>
 <body>
 
 <header class="site-header">
-  <a class="brand" href="/">DisasterTrack</a>
+  <a class="brand" href="/">ResQmap</a>
   <nav id="main-nav">
     <a class="nav-link" href="/">Home</a>
     <a class="nav-link" href="/map" id="nav-map" style="display:none">Live Map</a>
@@ -54,7 +54,7 @@
 <div id="location-confirm-modal">
   <div class="modal-box">
     <h2>Share Your Location?</h2>
-    <p>DisasterTrack would like to track your location so emergency responders can find you. Your coordinates are only visible to admins and police officers.</p>
+    <p>ResQmap would like to track your location so emergency responders can find you. Your coordinates are only visible to admins and police officers.</p>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="denyLocation()">Not Now</button>
       <button class="btn btn-primary" onclick="allowLocation()">Allow Location</button>
@@ -89,6 +89,7 @@ function authHeaders() {
 
 function logout() {
   clearToken();
+  localStorage.removeItem('_loginTime');
   stopLocationTracking();
   window.location.href = '/login';
 }
@@ -199,6 +200,14 @@ function showToastSent() {
 let _notifInterval = null;
 let _pendingNotifId = null;
 
+function _shownNotifIds() {
+  try { return new Set(JSON.parse(sessionStorage.getItem('_shownNotifs') || '[]')); } catch { return new Set(); }
+}
+function _markNotifShown(id) {
+  const s = _shownNotifIds(); s.add(id);
+  sessionStorage.setItem('_shownNotifs', JSON.stringify([...s]));
+}
+
 function startNotificationPolling() {
   checkNotifications();
   _notifInterval = setInterval(checkNotifications, 15000);
@@ -210,14 +219,20 @@ async function checkNotifications() {
     const r = await fetch('/api/users/me/notifications', { headers: authHeaders() });
     if (!r.ok) return;
     const notifs = await r.json();
-    if (notifs.length > 0) {
-      const notif = notifs[0];
-      _pendingNotifId = notif.id;
-      const isRescue = notif.notification_type === 'rescue';
+    // Find the first notification that hasn't been shown and was sent after login
+    const shown = _shownNotifIds();
+    const loginTime = localStorage.getItem('_loginTime');
+    const newNotif = notifs.find(n =>
+      !shown.has(n.id) && (!loginTime || new Date(n.sent_at) >= new Date(loginTime))
+    );
+    if (newNotif) {
+      _pendingNotifId = newNotif.id;
+      _markNotifShown(newNotif.id);
+      const isRescue = newNotif.notification_type === 'rescue';
       document.getElementById('notif-alert-content').style.display  = isRescue ? 'none' : '';
       document.getElementById('notif-rescue-content').style.display = isRescue ? '' : 'none';
       document.getElementById('notification-banner').classList.add('show');
-    } else {
+    } else if (notifs.length === 0) {
       document.getElementById('notification-banner').classList.remove('show');
     }
   } catch {}

@@ -7,7 +7,7 @@
 <div class="auth-wrap">
   <div class="auth-card">
     <h1>Welcome back</h1>
-    <p class="subtitle">Sign in to your DisasterTrack account</p>
+    <p class="subtitle">Sign in to your ResQmap account</p>
 
     <div id="alert-error" class="alert alert-error"></div>
 
@@ -54,9 +54,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
       return;
     }
     setToken(data.access_token);
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(pos => sendLocation(pos), () => {});
-    }
+    localStorage.setItem('_loginTime', new Date().toISOString());
     await loadCurrentUser();
     window.location.href = '/map';
   } catch {

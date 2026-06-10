@@ -7,7 +7,7 @@
 <div class="auth-wrap">
   <div class="auth-card" style="max-width:520px;">
     <h1>Create account</h1>
-    <p class="subtitle">Join DisasterTrack to stay safe and connected</p>
+    <p class="subtitle">Join ResQmap to stay safe and connected</p>
 
     <div id="alert-error" class="alert alert-error"></div>
     <div id="alert-success" class="alert alert-success"></div>
@@ -94,10 +94,8 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     if (lr.ok) {
       const td = await lr.json();
       setToken(td.access_token);
+      localStorage.setItem('_loginTime', new Date().toISOString());
       await loadCurrentUser();
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(pos => sendLocation(pos), () => {});
-      }
       window.location.href = '/map';
     } else {
       window.location.href = '/login';
